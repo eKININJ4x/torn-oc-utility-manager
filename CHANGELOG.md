@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.2
+Automatic-update verification release. No functional changes.
+
 ## 1.0.1
 Auto-update verification release. No functional changes.
 
