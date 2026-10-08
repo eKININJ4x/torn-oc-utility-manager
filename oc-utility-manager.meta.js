@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Companion - OC Utility Manager
 // @namespace    https://torn-companion.workers.dev/
-// @version      1.0.2
+// @version      1.0.3
 // @updateURL    https://raw.githubusercontent.com/eKININJ4x/torn-oc-utility-manager/main/oc-utility-manager.meta.js
 // @downloadURL  https://raw.githubusercontent.com/eKININJ4x/torn-oc-utility-manager/main/oc-utility-manager.user.js
 // @description  Helps faction staff identify and issue missing OC 2.0 armory items.
