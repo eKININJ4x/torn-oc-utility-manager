@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3
+- Highlights the required Armory category tab in green during the TC OC issue flow.
+- Highlight follows Torn page re-renders and clears after issue/cancel.
+
 ## 1.0.2
 Automatic-update verification release. No functional changes.
 
