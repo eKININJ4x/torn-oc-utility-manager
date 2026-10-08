@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Companion - OC Utility Manager
 // @namespace    https://torn-companion.workers.dev/
-// @version      1.0.2
+// @version      1.0.3
 // @updateURL    https://raw.githubusercontent.com/eKININJ4x/torn-oc-utility-manager/main/oc-utility-manager.meta.js
 // @downloadURL  https://raw.githubusercontent.com/eKININJ4x/torn-oc-utility-manager/main/oc-utility-manager.user.js
 // @description  Helps faction staff identify and issue missing OC 2.0 armory items.
@@ -18,10 +18,10 @@
   'use strict';
 
   // Torn Companion OC Utility Manager
-  // Public release v1.0.2.
+  // Public release v1.0.3.
   // Compatible with Tampermonkey and TornPDA.
 
-  const SCRIPT_VERSION = '1.0.2';
+  const SCRIPT_VERSION = '1.0.3';
   const STORAGE_KEY = 'tc_oc_api_key';
   const PENDING_KEY = 'tc_oc_pending_issue';
   const PANEL_ID = 'tc-oc-manager';
@@ -186,6 +186,16 @@
         border-radius:9px;padding:8px 10px;font-weight:800;cursor:pointer}
       #tc-oc-pending button.tc-p-primary{background:#6d28d9;border-color:#7c3aed;color:white}
       .tc-oc-highlight{outline:3px solid #a855f7!important;outline-offset:2px!important;border-radius:6px!important}
+      .tc-oc-required-tab{
+        background:linear-gradient(180deg,#34d399,#16a34a)!important;
+        color:#06140c!important;
+        border-color:#4ade80!important;
+        box-shadow:0 0 0 2px rgba(74,222,128,.30),0 0 18px rgba(34,197,94,.45)!important;
+        border-radius:8px!important;
+        font-weight:900!important;
+        transition:background .18s ease,box-shadow .18s ease!important
+      }
+      .tc-oc-required-tab *{color:#06140c!important}
       @media(max-width:700px){
         #${BUTTON_ID}{
           position:fixed;
@@ -624,6 +634,86 @@
     loot: 'Loot'
   })[String(cat || '').toLowerCase()] || 'Utilities';
 
+  let armoryHighlightObserver = null;
+
+  const clearRequiredArmoryHighlight = () => {
+    document.querySelectorAll('.tc-oc-required-tab').forEach(el => el.classList.remove('tc-oc-required-tab'));
+    if (armoryHighlightObserver) {
+      armoryHighlightObserver.disconnect();
+      armoryHighlightObserver = null;
+    }
+  };
+
+  const armoryCategoryTerms = (cat) => {
+    const key = String(cat || '').toLowerCase();
+    if (key === 'armor') return ['armor', 'armour'];
+    return [key, categoryLabel(key).toLowerCase()];
+  };
+
+  const applyRequiredArmoryHighlight = (pending) => {
+    if (!pending?.stockCategory || !isArmoryPage()) return false;
+
+    document.querySelectorAll('.tc-oc-required-tab').forEach(el => el.classList.remove('tc-oc-required-tab'));
+
+    const terms = armoryCategoryTerms(pending.stockCategory).filter(Boolean);
+    const clickables = [...document.querySelectorAll('a,button,[role="tab"],li')];
+
+    let target = clickables.find(el => {
+      const href = (el.getAttribute?.('href') || '').toLowerCase();
+      const dataTab = (
+        el.getAttribute?.('data-tab') ||
+        el.getAttribute?.('data-category') ||
+        el.getAttribute?.('data-type') ||
+        ''
+      ).toLowerCase();
+      return terms.some(term =>
+        href.includes('sub=' + term) ||
+        href.includes('/' + term) ||
+        dataTab === term ||
+        dataTab.includes(term)
+      );
+    });
+
+    if (!target) {
+      target = clickables.find(el => {
+        const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        return terms.some(term => text === term);
+      });
+    }
+
+    if (!target) {
+      target = clickables.find(el => {
+        const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        return terms.some(term => text.startsWith(term + ' ') || text.endsWith(' ' + term));
+      });
+    }
+
+    if (!target) return false;
+
+    const visualTarget =
+      target.matches('a,button,[role="tab"]')
+        ? target
+        : target.querySelector('a,button,[role="tab"]') || target;
+
+    visualTarget.classList.add('tc-oc-required-tab');
+    return true;
+  };
+
+  const watchRequiredArmoryTab = (pending) => {
+    clearRequiredArmoryHighlight();
+    if (!pending?.stockCategory || !isArmoryPage()) return;
+
+    applyRequiredArmoryHighlight(pending);
+
+    armoryHighlightObserver = new MutationObserver(() => {
+      if (!document.querySelector('.tc-oc-required-tab')) {
+        applyRequiredArmoryHighlight(pending);
+      }
+    });
+
+    armoryHighlightObserver.observe(document.body, { childList: true, subtree: true });
+  };
+
   const findRfcv = () => {
     try {
       const resources = performance.getEntriesByType('resource') || [];
@@ -775,6 +865,7 @@
       </div>
     `;
     document.body.appendChild(box);
+    watchRequiredArmoryTab(pending);
 
     const msg = box.querySelector('#tc-oc-pending-msg');
     const giveBtn = box.querySelector('#tc-oc-direct-give');
@@ -783,6 +874,7 @@
       await gmSet(PENDING_KEY, '');
       const routeKey = `tc_oc_routed_${pending.memberId}_${pending.itemId}_${String(pending.stockCategory || '').toLowerCase()}`;
       sessionStorage.removeItem(routeKey);
+      clearRequiredArmoryHighlight();
       box.remove();
     });
 
@@ -795,6 +887,7 @@
         msg.textContent = `Issued 1 × ${pending.itemName} to ${pending.memberName}.`;
         giveBtn.textContent = 'Issued ✓';
         await gmSet(PENDING_KEY, '');
+        clearRequiredArmoryHighlight();
       } catch (err) {
         giveBtn.disabled = false;
         msg.textContent = `Could not issue item: ${err.message}`;
