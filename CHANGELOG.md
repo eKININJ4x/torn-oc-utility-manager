@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 — 20 October 2026
+- Matches the OC Minimums menu typography, controls and dark palette.
+- Explicitly scopes readable text, labels, descriptions and input colours against Torn page styles.
+- Preserves saved preferences and existing workflows.
+
 ## 1.1.0 — 20 October 2026
 - Adds a dedicated mouse/touch drag handle and keyboard movement for the TC OC button.
 - Saves positions across reloads and updates, adapts them on resize, and keeps the launcher within the viewport.

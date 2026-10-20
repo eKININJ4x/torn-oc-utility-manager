@@ -3,7 +3,7 @@
 Public userscript for Torn City faction OC 2.0 item management.
 
 ## Version
-1.1.0
+1.1.1
 
 ## Compatibility
 - Tampermonkey

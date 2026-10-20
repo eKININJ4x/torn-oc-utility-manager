@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Companion - OC Utility Manager
 // @namespace    https://torn-companion.workers.dev/
-// @version      1.1.0
+// @version      1.1.1
 // @updateURL    https://raw.githubusercontent.com/eKININJ4x/torn-oc-utility-manager/main/oc-utility-manager.meta.js
 // @downloadURL  https://raw.githubusercontent.com/eKININJ4x/torn-oc-utility-manager/main/oc-utility-manager.user.js
 // @description  Helps faction staff identify and issue missing OC 2.0 armory items.
@@ -18,10 +18,10 @@
   'use strict';
 
   // Torn Companion OC Utility Manager
-  // Public release v1.1.0.
+  // Public release v1.1.1.
   // Compatible with Tampermonkey and TornPDA.
 
-  const SCRIPT_VERSION = '1.1.0';
+  const SCRIPT_VERSION = '1.1.1';
   const STORAGE_KEY = 'tc_oc_api_key';
   const PENDING_KEY = 'tc_oc_pending_issue';
   const PANEL_ID = 'tc-oc-manager';
@@ -463,6 +463,31 @@
         #${LAUNCHER_ID}{top:64px}
         #${PANEL_ID},
         #tc-oc-pending{top:102px}
+      }
+
+      #${PANEL_ID}{color:#edf3fa!important;font:14px/1.45 Arial,sans-serif!important;color-scheme:dark}
+      #${PANEL_ID} .tc-head{padding:14px 16px;border-color:#253246}
+      #${PANEL_ID} .tc-title{color:#edf3fa!important;font:800 16px/1.35 Arial,sans-serif!important}
+      #${PANEL_ID} .tc-sub{color:#c1ccd9!important;font:400 12px/1.5 Arial,sans-serif!important;margin-top:3px}
+      #${PANEL_ID} .tc-meta,#${PANEL_ID} .tc-msg{color:#c1ccd9!important;font:400 13px/1.5 Arial,sans-serif!important}
+      #${PANEL_ID} label,#${PANEL_ID} summary,#${PANEL_ID} .tc-settings>div{color:#edf3fa!important;font-family:Arial,sans-serif!important}
+      #${PANEL_ID} label,#${PANEL_ID} summary{font-size:14px!important;line-height:1.45;font-weight:700}
+      #${PANEL_ID} button,#${PANEL_ID} input,#${PANEL_ID} select{font:400 14px/1.4 Arial,sans-serif!important;color:#edf3fa!important}
+      #${PANEL_ID} button.tc-btn{font-weight:700!important;background:#172334;border-color:#35445b;padding:8px 10px}
+      #${PANEL_ID} button.tc-btn:hover{background:#23344c}
+      #${PANEL_ID} button.tc-primary{background:#6d28d9;border-color:#8b5cf6;color:#fff!important}
+      #${PANEL_ID} button.tc-primary:hover{background:#7c3aed}
+      #${PANEL_ID} .tc-close{background:transparent;border:0;color:#c1ccd9!important;font:400 24px/1 Arial,sans-serif!important;padding:2px 6px}
+      #${PANEL_ID} input,#${PANEL_ID} select{background:#0b111a;border-color:#52647d;border-radius:9px}
+      #${PANEL_ID} input::placeholder{color:#b3c0d0;opacity:1}
+      #${PANEL_ID} :is(button,input,select,summary):focus-visible{outline:2px solid #c699ff;outline-offset:2px}
+      #${PANEL_ID} .tc-settings{padding:14px 16px}
+      #${PANEL_ID} .tc-settings+.tc-settings{border-top:1px solid #253246}
+      #${PANEL_ID} #tc-oc-colours-status,#${PANEL_ID} #tc-oc-position-status{color:#e1d0ff!important}
+      @media(max-width:700px){
+        #${PANEL_ID} .tc-head{padding:10px 12px}
+        #${PANEL_ID} .tc-title{font-size:15px!important}
+        #${PANEL_ID} .tc-settings{padding:12px}
       }
     `;
     document.head.appendChild(style);
