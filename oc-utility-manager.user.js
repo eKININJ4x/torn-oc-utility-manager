@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Companion - OC Utility Manager
 // @namespace    https://torn-companion.workers.dev/
-// @version      1.0.4
+// @version      1.1.0
 // @updateURL    https://raw.githubusercontent.com/eKININJ4x/torn-oc-utility-manager/main/oc-utility-manager.meta.js
 // @downloadURL  https://raw.githubusercontent.com/eKININJ4x/torn-oc-utility-manager/main/oc-utility-manager.user.js
 // @description  Helps faction staff identify and issue missing OC 2.0 armory items.
@@ -18,15 +18,156 @@
   'use strict';
 
   // Torn Companion OC Utility Manager
-  // Public release v1.0.4.
+  // Public release v1.1.0.
   // Compatible with Tampermonkey and TornPDA.
 
-  const SCRIPT_VERSION = '1.0.4';
+  const SCRIPT_VERSION = '1.1.0';
   const STORAGE_KEY = 'tc_oc_api_key';
   const PENDING_KEY = 'tc_oc_pending_issue';
   const PANEL_ID = 'tc-oc-manager';
   const BUTTON_ID = 'tc-oc-button';
   const APPEARANCE_KEY = 'tc_oc_button_appearance_v1';
+  const POSITION_KEY = 'tc_oc_button_position_v1';
+  const LAUNCHER_ID = 'tc-oc-launcher';
+  let movement = null;
+
+    function makeMovableButton({ anchor, handle, read, write, panel, report }) {
+        const gap = 8;
+        const original = Object.fromEntries(['left', 'right', 'top', 'bottom'].map(key => [key, anchor.style[key]]));
+        let saved = null;
+        let active = null;
+        let disposed = false;
+        let touched = false;
+        let writes = Promise.resolve();
+        const view = () => ({
+            width: Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth),
+            height: Math.min(window.innerHeight, document.documentElement.clientHeight || window.innerHeight)
+        });
+        const clamp = (n, low, high) => Math.max(low, Math.min(Math.max(low, high), n));
+        const rect = () => anchor.getBoundingClientRect();
+        function placePanel() {
+            const box = panel?.();
+            if (!box || box.hidden) return;
+            const size = view();
+            box.style.maxWidth = Math.max(0, size.width - gap * 2) + 'px';
+            let bounds = box.getBoundingClientRect();
+            if (bounds.height > size.height - gap * 2) {
+                box.style.maxHeight = Math.max(60, size.height - gap * 2) + 'px';
+                bounds = box.getBoundingClientRect();
+            }
+            const button = rect();
+            const below = size.height - button.bottom - gap * 2;
+            const above = button.top - gap * 2;
+            const top = below >= bounds.height || below >= above ? button.bottom + gap : button.top - gap - bounds.height;
+            box.style.left = clamp(button.left, gap, size.width - bounds.width - gap) + 'px';
+            box.style.top = clamp(top, gap, size.height - bounds.height - gap) + 'px';
+            box.style.right = 'auto'; box.style.bottom = 'auto';
+        }
+        function move(left, top) {
+            const size = view(), bounds = rect();
+            anchor.style.left = Math.round(clamp(left, gap, size.width - bounds.width - gap) * 100) / 100 + 'px';
+            anchor.style.top = Math.round(clamp(top, gap, size.height - bounds.height - gap) * 100) / 100 + 'px';
+            anchor.style.right = 'auto'; anchor.style.bottom = 'auto';
+            placePanel();
+        }
+        function restore() {
+            if (!saved) {
+                for (const [key, value] of Object.entries(original)) anchor.style[key] = value;
+                const bounds = rect(); move(bounds.left, bounds.top);
+            } else {
+                const size = view(), bounds = rect();
+                move(gap + saved.x * Math.max(0, size.width - bounds.width - gap * 2),
+                    gap + saved.y * Math.max(0, size.height - bounds.height - gap * 2));
+            }
+        }
+        function persist(value) {
+            writes = writes.then(async () => {
+                if (disposed) return false;
+                try { await write(value); report?.('Button position saved.'); return true; }
+                catch { report?.('Moved for this page, but the position could not be saved.'); return false; }
+            });
+            return writes;
+        }
+        function remember() {
+            const size = view(), bounds = rect();
+            saved = {
+                version: 1,
+                x: clamp((bounds.left - gap) / Math.max(1, size.width - bounds.width - gap * 2), 0, 1),
+                y: clamp((bounds.top - gap) / Math.max(1, size.height - bounds.height - gap * 2), 0, 1)
+            };
+            return persist(JSON.stringify(saved));
+        }
+        function release() {
+            const id = active?.id; active = null;
+            try { if (id !== undefined) handle.releasePointerCapture?.(id); } catch {}
+            handle.style.cursor = 'grab';
+        }
+        function cancel() { if (active) { release(); restore(); } }
+        function down(event) {
+            if (event.button !== 0 || active) return;
+            touched = true;
+            event.preventDefault(); event.stopPropagation();
+            const bounds = rect();
+            active = { id: event.pointerId, x: event.clientX, y: event.clientY, left: bounds.left, top: bounds.top, moved: false };
+            handle.focus({ preventScroll: true }); handle.style.cursor = 'grabbing';
+            try { handle.setPointerCapture?.(event.pointerId); } catch {}
+        }
+        function pointerMove(event) {
+            if (!active || event.pointerId !== active.id) return;
+            const dx = event.clientX - active.x, dy = event.clientY - active.y;
+            if (!active.moved && Math.hypot(dx, dy) < 4) return;
+            active.moved = true; event.preventDefault();
+            move(active.left + dx, active.top + dy);
+        }
+        function up(event) {
+            if (!active || event.pointerId !== active.id) return;
+            const moved = active.moved; release();
+            if (moved) remember();
+        }
+        function key(event) {
+            const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+            if (!arrows[event.key]) return;
+            touched = true; event.preventDefault(); event.stopPropagation();
+            const bounds = rect(), step = event.shiftKey ? 10 : 2, [x, y] = arrows[event.key];
+            move(bounds.left + x * step, bounds.top + y * step); remember();
+        }
+        function click(event) { event.preventDefault(); event.stopPropagation(); }
+        function resize() { cancel(); restore(); }
+        handle.addEventListener('pointerdown', down);
+        handle.addEventListener('keydown', key);
+        handle.addEventListener('click', click);
+        handle.addEventListener('lostpointercapture', cancel);
+        window.addEventListener('pointermove', pointerMove, { passive: false });
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', cancel);
+        window.addEventListener('blur', cancel);
+        window.addEventListener('resize', resize);
+        restore();
+        const ready = Promise.resolve().then(read).then(value => {
+            if (disposed || touched) return;
+            const parsed = typeof value === 'string' ? JSON.parse(value || 'null') : value;
+            if (parsed?.version === 1 && [parsed.x, parsed.y].every(n => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 1)) saved = parsed;
+            restore();
+        }).catch(() => { if (!disposed && !touched) restore(); });
+        return {
+            ready, placePanel, reflow() { if (!active) restore(); },
+            async reset() {
+                if (disposed) return false;
+                cancel(); touched = true; saved = null; restore();
+                const ok = await persist('');
+                if (ok) report?.('Default button position restored.');
+                return ok;
+            },
+            stop() {
+                cancel(); disposed = true;
+                handle.removeEventListener('pointerdown', down); handle.removeEventListener('keydown', key);
+                handle.removeEventListener('click', click); handle.removeEventListener('lostpointercapture', cancel);
+                window.removeEventListener('pointermove', pointerMove); window.removeEventListener('pointerup', up);
+                window.removeEventListener('pointercancel', cancel); window.removeEventListener('blur', cancel);
+                window.removeEventListener('resize', resize);
+            }
+        };
+    }
 
   const isFactionPage = () => location.pathname.includes('factions.php');
 
@@ -149,6 +290,9 @@
     const style = document.createElement('style');
     style.id = 'tc-oc-style';
     style.textContent = `
+      #${LAUNCHER_ID}{position:fixed;right:18px;top:18px;z-index:99998;display:flex;align-items:center;gap:6px}
+      #${LAUNCHER_ID} .tc-drag-handle{border:1px solid #72528c;border-radius:9px;background:#21182e;color:#e4d4f4;padding:9px 7px;font:700 20px/1 Arial,sans-serif;cursor:grab;touch-action:none;user-select:none}
+      #${LAUNCHER_ID} .tc-drag-handle:focus-visible{outline:2px solid #c699ff;outline-offset:2px}
       #${BUTTON_ID}{
         position:fixed;right:18px;top:18px;z-index:99998;
         border:0;border-radius:999px;padding:12px 16px;
@@ -212,6 +356,7 @@
       }
       .tc-oc-required-tab *{color:#06140c!important}
       @media(max-width:700px){
+        #${LAUNCHER_ID}{right:max(10px,env(safe-area-inset-right));top:clamp(72px,10vh,96px)}
         #${BUTTON_ID}{
           position:fixed;
           right:max(10px,env(safe-area-inset-right));
@@ -299,6 +444,7 @@
       }
 
       @media(max-width:420px){
+        #${LAUNCHER_ID}{top:clamp(68px,9vh,88px);right:max(8px,env(safe-area-inset-right))}
         #${BUTTON_ID}{
           top:clamp(68px,9vh,88px);
           right:max(8px,env(safe-area-inset-right))
@@ -314,6 +460,7 @@
 
       @media(max-height:700px) and (max-width:700px){
         #${BUTTON_ID}{top:64px}
+        #${LAUNCHER_ID}{top:64px}
         #${PANEL_ID},
         #tc-oc-pending{top:102px}
       }
@@ -327,6 +474,8 @@
     if (!document.getElementById(BUTTON_ID)) {
       const btn = document.createElement('button');
       btn.id = BUTTON_ID;
+      btn.type = 'button';
+      btn.style.position = 'static';
       btn.textContent = 'TC OC';
       btn.title = 'Open Torn Companion OC Utility Manager';
       btn.addEventListener('click', () => {
@@ -337,7 +486,19 @@
           openPanel();
         }
       });
-      document.body.appendChild(btn);
+      movement?.stop();
+      document.getElementById(LAUNCHER_ID)?.remove();
+      const launcher = document.createElement('div'); launcher.id = LAUNCHER_ID;
+      const handle = document.createElement('button'); handle.type = 'button'; handle.className = 'tc-drag-handle';
+      handle.textContent = '⠿'; handle.setAttribute('aria-label', 'Move TC OC button');
+      handle.title = 'Drag to move. Arrow keys move; Shift moves faster.';
+      launcher.append(btn, handle); document.body.appendChild(launcher);
+      movement = makeMovableButton({
+        anchor: launcher, handle,
+        read: () => gmGet(POSITION_KEY, ''), write: value => gmSet(POSITION_KEY, value),
+        panel: () => document.getElementById(PANEL_ID),
+        report: text => { const status = document.getElementById('tc-oc-position-status'); if (status) status.textContent = text; }
+      });
       readButtonAppearance().then(appearance => paintButton(btn, appearance));
     }
   };
@@ -363,6 +524,7 @@
     `;
 
     document.body.appendChild(panel);
+    movement?.placePanel();
 
     panel.querySelector('.tc-close').addEventListener('click', () => panel.remove());
     panel.querySelector('[data-action="refresh"]').addEventListener('click', refresh);
@@ -401,8 +563,16 @@
         </div>
         <p class="tc-meta" id="tc-oc-colours-status" role="status" aria-live="polite"></p>
       </div>
+      <div class="tc-settings" style="border-top:1px solid #253246">
+        <div style="font-weight:800">Button position</div>
+        <p class="tc-meta">Drag the dotted handle with a mouse or finger. Focus the handle and use arrow keys to move it; hold Shift for larger steps. Its position is saved and adapts to screen size.</p>
+        <button type="button" class="tc-btn" id="tc-oc-reset-position">Reset position</button>
+        <p class="tc-meta" id="tc-oc-position-status" role="status" aria-live="polite"></p>
+      </div>
     `;
 
+    movement?.placePanel();
+    body.querySelector('#tc-oc-reset-position').addEventListener('click', () => movement.reset());
     const background = body.querySelector('#tc-oc-button-background');
     const text = body.querySelector('#tc-oc-button-text');
     const preview = body.querySelector('#tc-oc-button-preview');
@@ -975,6 +1145,7 @@
 
   let lastUrl = location.href;
   new MutationObserver(() => {
+    movement?.placePanel();
     if (location.href !== lastUrl) {
       lastUrl = location.href;
       routeBoot();
