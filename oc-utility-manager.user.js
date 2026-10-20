@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Companion - OC Utility Manager
 // @namespace    https://torn-companion.workers.dev/
-// @version      1.0.3
+// @version      1.0.4
 // @updateURL    https://raw.githubusercontent.com/eKININJ4x/torn-oc-utility-manager/main/oc-utility-manager.meta.js
 // @downloadURL  https://raw.githubusercontent.com/eKININJ4x/torn-oc-utility-manager/main/oc-utility-manager.user.js
 // @description  Helps faction staff identify and issue missing OC 2.0 armory items.
@@ -18,14 +18,15 @@
   'use strict';
 
   // Torn Companion OC Utility Manager
-  // Public release v1.0.3.
+  // Public release v1.0.4.
   // Compatible with Tampermonkey and TornPDA.
 
-  const SCRIPT_VERSION = '1.0.3';
+  const SCRIPT_VERSION = '1.0.4';
   const STORAGE_KEY = 'tc_oc_api_key';
   const PENDING_KEY = 'tc_oc_pending_issue';
   const PANEL_ID = 'tc-oc-manager';
   const BUTTON_ID = 'tc-oc-button';
+  const APPEARANCE_KEY = 'tc_oc_button_appearance_v1';
 
   const isFactionPage = () => location.pathname.includes('factions.php');
 
@@ -67,6 +68,20 @@
       if (typeof GM_setValue === 'function') return await GM_setValue(key, value);
     } catch {}
     localStorage.setItem(key, value);
+  };
+
+  const readButtonAppearance = async () => {
+    try {
+      const raw = await gmGet(APPEARANCE_KEY, '');
+      const saved = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw;
+      return saved && /^#[0-9a-f]{6}$/i.test(saved.background) && /^#[0-9a-f]{6}$/i.test(saved.text) ? saved : null;
+    } catch { return null; }
+  };
+
+  const paintButton = (button, appearance) => {
+    if (!button) return;
+    button.style.background = appearance?.background || 'linear-gradient(180deg,#a855f7,#7c3aed)';
+    button.style.color = appearance?.text || '#ffffff';
   };
 
   const apiRequest = async (path, key) => {
@@ -323,6 +338,7 @@
         }
       });
       document.body.appendChild(btn);
+      readButtonAppearance().then(appearance => paintButton(btn, appearance));
     }
   };
 
@@ -341,7 +357,7 @@
       </div>
       <div class="tc-tools">
         <button class="tc-btn tc-primary" data-action="refresh">Refresh</button>
-        <button class="tc-btn" data-action="settings">API key</button>
+        <button class="tc-btn" data-action="settings">Settings</button>
       </div>
       <div class="tc-body"><div class="tc-msg">Open the panel and press Refresh to scan current OC requirements.</div></div>
     `;
@@ -361,6 +377,7 @@
     if (!panel) return;
 
     const key = await gmGet(STORAGE_KEY, '');
+    const appearance = await readButtonAppearance();
     const body = panel.querySelector('.tc-body');
     body.innerHTML = `
       <div class="tc-settings">
@@ -369,7 +386,52 @@
         <input id="tc-oc-key" type="password" autocomplete="off" placeholder="Paste API key" value="${esc(key)}">
         <button class="tc-btn tc-primary" id="tc-oc-save-key">Save API key</button>
       </div>
+      <div class="tc-settings" style="border-top:1px solid #253246">
+        <div style="font-weight:800">Button colours</div>
+        <p class="tc-meta">Choose colours for your TC OC button. Saved choices stay in this userscript/browser through updates.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label for="tc-oc-button-background">Background<input type="color" id="tc-oc-button-background" value="${esc(appearance?.background || '#7c3aed')}" style="height:42px;padding:4px"></label>
+          <label for="tc-oc-button-text">Text<input type="color" id="tc-oc-button-text" value="${esc(appearance?.text || '#ffffff')}" style="height:42px;padding:4px"></label>
+        </div>
+        <div class="tc-meta" style="margin-bottom:8px">Preview</div>
+        <span id="tc-oc-button-preview" style="display:inline-block;border-radius:999px;padding:12px 16px;font:700 14px/1.2 Arial,sans-serif">TC OC</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+          <button type="button" class="tc-btn tc-primary" id="tc-oc-save-colours">Save colours</button>
+          <button type="button" class="tc-btn" id="tc-oc-reset-colours">Reset colours</button>
+        </div>
+        <p class="tc-meta" id="tc-oc-colours-status" role="status" aria-live="polite"></p>
+      </div>
     `;
+
+    const background = body.querySelector('#tc-oc-button-background');
+    const text = body.querySelector('#tc-oc-button-text');
+    const preview = body.querySelector('#tc-oc-button-preview');
+    const status = body.querySelector('#tc-oc-colours-status');
+    const save = body.querySelector('#tc-oc-save-colours');
+    const reset = body.querySelector('#tc-oc-reset-colours');
+    const chosenColours = () => ({ background: background.value, text: text.value });
+    paintButton(preview, appearance);
+    for (const input of [background, text]) input.addEventListener('input', () => {
+      paintButton(preview, chosenColours());
+      status.textContent = 'Preview only. Save colours to apply.';
+    });
+    const persistColours = async appearance => {
+      save.disabled = reset.disabled = true;
+      try {
+        await gmSet(APPEARANCE_KEY, appearance ? JSON.stringify(appearance) : '');
+        paintButton(document.getElementById(BUTTON_ID), appearance);
+        paintButton(preview, appearance);
+        status.textContent = appearance ? 'Button colours saved.' : 'Default button colours restored.';
+        return true;
+      } catch { status.textContent = 'Could not save colours. Your saved colours have not changed.'; return false; }
+      finally { save.disabled = reset.disabled = false; }
+    };
+    save.addEventListener('click', () => persistColours(chosenColours()));
+    reset.addEventListener('click', async () => {
+      if (await persistColours(null)) {
+        background.value = '#7c3aed'; text.value = '#ffffff';
+      }
+    });
 
     body.querySelector('#tc-oc-save-key').addEventListener('click', async () => {
       const value = body.querySelector('#tc-oc-key').value.trim();

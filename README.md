@@ -3,7 +3,7 @@
 Public userscript for Torn City faction OC 2.0 item management.
 
 ## Version
-1.0.0
+1.0.4
 
 ## Compatibility
 - Tampermonkey
@@ -29,3 +29,7 @@ The Torn API key is stored locally by the userscript/browser and is sent only to
 
 ## Torn Companion
 Community tools for Torn City.
+
+## Button colours
+Open TC OC, select **Settings**, then use **Button colours** to choose a background and text colour. Preview changes before selecting **Save colours**. **Reset colours** restores the purple gradient and white text. Preferences are saved separately from your API key and persist through script updates in the same userscript/browser. Torn PDA uses the same controls.
+
